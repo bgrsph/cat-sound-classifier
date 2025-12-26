@@ -1,37 +1,33 @@
-# Import necessary libraries
+"""
+Cat Sound Mood Classifier - CLI argument parsing.
+"""
+
 import argparse
 from pathlib import Path
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Cat Sound Mood Classifier")
-
-    # Add arguments
-    parser.add_argument(
-        "--data-dir",
-        type=Path,
-        default=Path("data/raw"),
-        help="Directory containing mood folders with audio files",
-    )
-    parser.add_argument(
-        "--model-path",
-        type=Path,
-        default=Path("models/classifier.pkl"),
-        help="Path to save/load the trained model",
-    )
-    parser.add_argument("--train", action="store_true", help="Train a new classifier")
-    parser.add_argument(
-        "--predict", type=Path, default=None, help="Audio file to predict mood for"
-    )
-    parser.add_argument(
-        "--augment",
-        action="store_true",
-        help="Apply audio augmentation during training",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Print detailed progress information",
-    )
+    
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
+    
+    # Train
+    train_parser = subparsers.add_parser("train", help="Train a model")
+    train_parser.add_argument("--data-dir", type=Path, default=Path("data/interim"))
+    train_parser.add_argument("--model-path", type=Path, default=Path("models/cat_meow.pt"))
+    train_parser.add_argument("--epochs", type=int, default=50)
+    train_parser.add_argument("--batch-size", type=int, default=16)
+    train_parser.add_argument("--lr", type=float, default=0.001)
+    
+    # Test
+    test_parser = subparsers.add_parser("test", help="Evaluate a model")
+    test_parser.add_argument("--model-path", type=Path, required=True)
+    test_parser.add_argument("--data-dir", type=Path, default=Path("data/interim"))
+    test_parser.add_argument("--batch-size", type=int, default=16)
+    
     return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    print(args)
