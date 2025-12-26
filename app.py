@@ -206,56 +206,143 @@ MOOD_EMOJIS = {
     "Warning": "⚠️",
 }
 
-# Custom CSS for better mobile experience
-custom_css = """
-.gradio-container {
-    max-width: 600px !important;
-    margin: auto !important;
+# Translations
+TRANSLATIONS = {
+    "EN": {
+        "title": "🐱 Cat Mood Classifier",
+        "subtitle": "**Record your cat's meow to detect its mood!**",
+        "instructions": "Click the microphone button to record, or upload an audio file. The model will classify the sound into one of 10 cat moods. **Note:** Please allow microphone access in your browser when prompted.",
+        "audio_label": "🎤 Record or Upload Cat Sound",
+        "output_label": "🐱 Detected Mood",
+        "submit_btn": "🔮 Classify Mood",
+        "clear_btn": "🗑️ Clear",
+        "language_label": "🌐 Language",
+        "moods": {
+            "Angry": "Angry",
+            "Defense": "Defensive",
+            "Fighting": "Fighting",
+            "Happy": "Happy",
+            "HuntingMind": "Hunting",
+            "Mating": "Mating Call",
+            "MotherCall": "Mother Call",
+            "Paining": "In Pain",
+            "Resting": "Resting",
+            "Warning": "Warning",
+        }
+    },
+    "TR": {
+        "title": "🐱 Miyavdan Haller",
+        "subtitle": "**Kedinizin miyavlamasını kaydedin ve ruh halini öğrenin!**",
+        "instructions": "Kayıt yapmak için mikrofon butonuna tıklayın veya ses dosyası yükleyin. Yapay zeka modeli, sesi 10 farklı kedi ruh haline göre sınıflandıracak. **Not:** Lütfen tarayıcınızda mikrofon erişimine izin verin.",
+        "audio_label": "🎤 Kedi Sesi Kaydet veya Yükle",
+        "output_label": "🐱 Tespit Edilen Ruh Hali",
+        "submit_btn": "🔮 Ruh Halini Belirle",
+        "clear_btn": "🗑️ Temizle",
+        "language_label": "🌐 Dil",
+        "moods": {
+            "Angry": "Kızgın",
+            "Defense": "Savunmada",
+            "Fighting": "Kavgacı",
+            "Happy": "Mutlu",
+            "HuntingMind": "Avcı Modunda",
+            "Mating": "Çiftleşme Çağrısı",
+            "MotherCall": "Anne Çağrısı",
+            "Paining": "Acı Çekiyor",
+            "Resting": "Dinleniyor",
+            "Warning": "Uyarı",
+        }
+    }
 }
-h1 {
-    text-align: center;
-    font-size: 2.5rem !important;
-}
-.description {
-    text-align: center;
-}
-"""
 
-# Create the interface
-demo = gr.Interface(
-    fn=predict,
-    inputs=gr.Audio(
+def predict_with_translation(audio, language):
+    """Predict and translate results based on selected language."""
+    result = predict(audio)
+    
+    if result is None or "Error" in str(result) or "No audio" in str(result):
+        return result
+    
+    # Translate mood labels
+    translations = TRANSLATIONS[language]["moods"]
+    translated_result = {}
+    for mood, prob in result.items():
+        translated_mood = translations.get(mood, mood)
+        emoji = MOOD_EMOJIS.get(mood, "🐱")
+        translated_result[f"{emoji} {translated_mood}"] = prob
+    
+    return translated_result
+
+# Create the interface with Blocks for language switching
+with gr.Blocks(title="Cat Mood Classifier") as demo:
+    # State for current language
+    current_lang = gr.State("EN")
+    
+    # Header row with title on left, language on right
+    with gr.Row():
+        with gr.Column(scale=4):
+            title_md = gr.Markdown("# 🐱 Miyavdan Haller")
+        with gr.Column(scale=1, min_width=120):
+            language_select = gr.Radio(
+                choices=["EN", "TR"],
+                value="TR",
+                label="🌐",
+                interactive=True,
+            )
+    
+    subtitle_md = gr.Markdown("**Kedinizin miyavlamasını kaydedin ve ruh halini öğrenin!**")
+    instructions_md = gr.Markdown("Kayıt yapmak için mikrofon butonuna tıklayın veya ses dosyası yükleyin. Yapay zeka modeli, sesi 10 farklı kedi ruh haline göre sınıflandıracak. **Not:** Lütfen tarayıcınızda mikrofon erişimine izin verin.")
+    
+    # Main interface - vertical layout
+    audio_input = gr.Audio(
         sources=["microphone", "upload"],
         type="numpy",
-        label="🎤 Record or Upload Cat Sound",
-    ),
-    outputs=gr.Label(
-        num_top_classes=5,
-        label="🐱 Detected Mood",
-    ),
-    title="🐱 Cat Mood Classifier",
-    description="""
-    **Record your cat's meow to detect its mood!**
+        label="🎤 Kedi Sesi Kaydet veya Yükle",
+    )
     
-    Click the microphone button to record, or upload an audio file.
-    The model will classify the sound into one of 10 cat moods.
-    """,
-    examples=[
-        # Add example audio files here if you have them
-        # ["examples/angry_cat.wav"],
-        # ["examples/happy_cat.wav"],
-    ],
-    flagging_mode="never",
-)
+    with gr.Row():
+        clear_btn = gr.ClearButton([audio_input], value="🗑️ Temizle")
+        submit_btn = gr.Button("🔮 Ruh Halini Belirle", variant="primary")
+    
+    output_label = gr.Label(
+        num_top_classes=5,
+        label="🐱 Tespit Edilen Ruh Hali",
+    )
+    
+    # Function to update UI text based on language
+    def update_language(lang):
+        t = TRANSLATIONS[lang]
+        return (
+            f"# {t['title']}",
+            t["subtitle"],
+            t["instructions"],
+            gr.update(label=t["audio_label"]),
+            gr.update(label=t["output_label"]),
+            gr.update(value=t["submit_btn"]),
+            gr.update(value=t["clear_btn"]),
+        )
+    
+    # Connect language selector
+    language_select.change(
+        fn=update_language,
+        inputs=[language_select],
+        outputs=[title_md, subtitle_md, instructions_md, audio_input, output_label, submit_btn, clear_btn],
+    )
+    
+    # Connect submit button
+    submit_btn.click(
+        fn=predict_with_translation,
+        inputs=[audio_input, language_select],
+        outputs=output_label,
+    )
 
 
 # ========== Launch ==========
 if __name__ == "__main__":
+    print("\n🚀 Starting Cat Mood Classifier...")
+    print("   Supports: English (EN) and Turkish (TR)")
+    print("   Press Ctrl+C to stop\n")
     demo.launch(
-        share=True,  # Creates public URL (great for mobile testing!)
+        share=False,  # Creates public URL (great for mobile testing!)
         # server_name="0.0.0.0",  # Uncomment to allow LAN access
         # server_port=7860,
-        theme=gr.themes.Soft(),
-        css=custom_css,
     )
 
