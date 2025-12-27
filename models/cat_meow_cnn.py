@@ -20,16 +20,18 @@ class CatMeowCNN(nn.Module):
         - Fully connected classifier
     """
     
-    def __init__(self, n_classes: int = 10, input_shape: tuple = (128, 173)):
+    def __init__(self, n_classes: int = 10, input_shape: tuple = (128, 173), dropout: float = 0.5):
         """
         Args:
             n_classes: Number of output classes
             input_shape: (n_mels, time_frames) of input spectrogram
+            dropout: Dropout rate for classifier layers
         """
         super().__init__()
         
         self.n_classes = n_classes
         self.input_shape = input_shape
+        self.dropout = dropout
         
         # Convolutional blocks
         self.conv_blocks = nn.Sequential(
@@ -61,13 +63,13 @@ class CatMeowCNN(nn.Module):
         # Global average pooling
         self.global_pool = nn.AdaptiveAvgPool2d(1)
         
-        # Classifier
+        # Classifier with configurable dropout
         self.classifier = nn.Sequential(
             nn.Flatten(),
-            nn.Dropout(0.5),
+            nn.Dropout(dropout),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout * 0.6),  # Slightly lower for second layer
             nn.Linear(128, n_classes),
         )
     

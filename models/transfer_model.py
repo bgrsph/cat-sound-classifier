@@ -23,6 +23,7 @@ class TransferCNN(nn.Module):
         backbone: str = "resnet18",
         pretrained: bool = True,
         freeze_backbone: bool = False,
+        dropout: float = 0.5,
     ):
         """
         Args:
@@ -31,6 +32,7 @@ class TransferCNN(nn.Module):
                       Options: "resnet18", "resnet34", "resnet50", "efficientnet_b0", "efficientnet_b2"
             pretrained: Whether to use pretrained ImageNet weights
             freeze_backbone: If True, freeze backbone weights (only train classifier)
+            dropout: Dropout rate for classifier layers
         """
         super().__init__()
         
@@ -75,14 +77,15 @@ class TransferCNN(nn.Module):
             for param in self.backbone.parameters():
                 param.requires_grad = False
         
-        # Custom classifier head
+        # Custom classifier head with configurable dropout
         self.classifier = nn.Sequential(
-            nn.Dropout(0.5),
+            nn.Dropout(dropout),
             nn.Linear(n_features, 256),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(dropout * 0.6),  # Slightly lower for second layer
             nn.Linear(256, n_classes),
         )
+        self.dropout = dropout
         
         self.n_features = n_features
     

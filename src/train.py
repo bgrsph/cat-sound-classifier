@@ -19,6 +19,8 @@ def train(
     save_path: str = None,
     patience: int = None,
     verbose: bool = True,
+    optimizer_type: str = "adam",
+    weight_decay: float = 0.0,
 ):
     """
     Train a model.
@@ -42,7 +44,21 @@ def train(
     
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    
+    # Choose optimizer
+    if optimizer_type.lower() == "sgd":
+        optimizer = torch.optim.SGD(
+            model.parameters(), 
+            lr=learning_rate, 
+            momentum=0.9,
+            weight_decay=weight_decay
+        )
+    else:  # adam
+        optimizer = torch.optim.Adam(
+            model.parameters(), 
+            lr=learning_rate,
+            weight_decay=weight_decay
+        )
     
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
     best_val_acc = 0
@@ -130,6 +146,8 @@ def cross_validate(
     patience: int = None,
     device: str = None,
     verbose: bool = True,
+    optimizer_type: str = "adam",
+    weight_decay: float = 0.0,
     **model_kwargs,
 ):
     """
@@ -146,6 +164,8 @@ def cross_validate(
         patience: Early stopping patience
         device: Device
         verbose: Print progress
+        optimizer_type: "adam" or "sgd"
+        weight_decay: L2 regularization weight
         **model_kwargs: Additional args for model_class
     
     Returns:
@@ -179,7 +199,13 @@ def cross_validate(
         )
         
         # Create fresh model for each fold
-        model = model_class(**model_kwargs)
+        # model_class can be a class or a factory function
+        if callable(model_class) and not isinstance(model_class, type):
+            # It's a factory function (lambda or regular function)
+            model = model_class()
+        else:
+            # It's a class
+            model = model_class(**model_kwargs)
         
         # Train
         history = train(
@@ -191,6 +217,8 @@ def cross_validate(
             device=device,
             patience=patience,
             verbose=verbose,
+            optimizer_type=optimizer_type,
+            weight_decay=weight_decay,
         )
         
         best_val_acc = max(history["val_acc"])

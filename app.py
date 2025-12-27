@@ -341,7 +341,7 @@ if __name__ == "__main__":
     print("   Supports: English (EN) and Turkish (TR)")
     print("   Press Ctrl+C to stop\n")
     demo.launch(
-        share=False,  # Creates public URL (great for mobile testing!)
+        share=True,  # Creates public URL (great for mobile testing!)
         # server_name="0.0.0.0",  # Uncomment to allow LAN access
         # server_port=7860,
     )
