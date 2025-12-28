@@ -11,11 +11,12 @@ import numpy as np
 import pickle
 from pathlib import Path
 
-# Import model
-from models import CatMeowCNN
+# Import models
+from models import CatMeowCNN, TransferCNN
 
 # ========== Configuration ==========
-MODEL_PATH = Path("results/cat_meow.pt")
+MODEL_PATH = Path("results/tuned_model.pt")
+TUNING_RESULTS_PATH = Path("results/tuning_results.pkl")
 METADATA_PATH = Path("data/interim/metadata.pkl")
 
 # Audio preprocessing (must match preprocess.ipynb)
@@ -28,7 +29,7 @@ HOP_LENGTH = 512
 
 # ========== Load Model & Metadata ==========
 def load_model():
-    """Load trained model and label mapping."""
+    """Load tuned model and label mapping."""
     # Load metadata
     with open(METADATA_PATH, "rb") as f:
         metadata = pickle.load(f)
@@ -36,8 +37,25 @@ def load_model():
     idx_to_label = metadata["idx_to_label"]
     n_classes = len(idx_to_label)
     
-    # Load model
-    model = CatMeowCNN(n_classes=n_classes)
+    # Load tuning results to get best model type
+    with open(TUNING_RESULTS_PATH, "rb") as f:
+        tuning_results = pickle.load(f)
+    
+    best_params = tuning_results["best_params"]
+    
+    # Create correct model type
+    if best_params["model"] == "TransferCNN":
+        model = TransferCNN(
+            n_classes=n_classes,
+            backbone=best_params.get("backbone", "resnet18"),
+            freeze_backbone=best_params.get("freeze_backbone", True),
+            dropout=best_params.get("dropout", 0.5),
+        )
+        print(f"Using TransferCNN with {best_params.get('backbone')} backbone")
+    else:
+        model = CatMeowCNN(n_classes=n_classes, dropout=best_params.get("dropout", 0.5))
+        print("Using CatMeowCNN")
+    
     model.load_state_dict(torch.load(MODEL_PATH, weights_only=True, map_location="cpu"))
     model.eval()
     
@@ -157,7 +175,7 @@ def predict(audio):
         print(f"   ✓ Tensor shape: {x.shape}")
         
         # Predict
-        print(f"   → Passing through CatMeowCNN model...")
+        print(f"   → Passing through model...")
         with torch.no_grad():
             logits = model(x)
             print(f"   ✓ Raw logits: {logits.shape}")
@@ -209,12 +227,19 @@ MOOD_EMOJIS = {
 # Translations
 TRANSLATIONS = {
     "EN": {
-        "title": "🐱 Cat Mood Classifier",
+        "title": "🐱 Moods from Meows",
         "subtitle": "**Record your cat's meow to detect its mood!**",
-        "instructions": "Click the microphone button to record, or upload an audio file. The model will classify the sound into one of 10 cat moods. **Note:** Please allow microphone access in your browser when prompted.",
+        "instructions": """
+- 📁 Don't want to record? Upload any cat sound file by clicking the upload icon.
+- 🎙️ To record, first allow microphone access in your browser.
+- 🔴 Click **Record** to start recording.
+- 🐱 Record your cat's meow. A few seconds is enough!
+- ⏹️ Click 🔴 **Stop** to finish recording.
+- 🔮 Click **"Detect Mood"** and wait for the AI to analyze your cat's mood.
+""",
         "audio_label": "🎤 Record or Upload Cat Sound",
         "output_label": "🐱 Detected Mood",
-        "submit_btn": "🔮 Classify Mood",
+        "submit_btn": "🔮 Detect Mood",
         "clear_btn": "🗑️ Clear",
         "language_label": "🌐 Language",
         "moods": {
@@ -233,7 +258,14 @@ TRANSLATIONS = {
     "TR": {
         "title": "🐱 Miyavdan Haller",
         "subtitle": "**Kedinizin miyavlamasını kaydedin ve ruh halini öğrenin!**",
-        "instructions": "Kayıt yapmak için mikrofon butonuna tıklayın veya ses dosyası yükleyin. Yapay zeka modeli, sesi 10 farklı kedi ruh haline göre sınıflandıracak. **Not:** Lütfen tarayıcınızda mikrofon erişimine izin verin.",
+        "instructions": """
+- 📁 Kayıt yapmak istemezseniz, yükleme ikonuna tıklayarak istediğiniz bir kedi sesi dosyasını yükleyebilirsiniz.
+- 🎙️ Kayıt yapmak için öncelikle tarayıcınızın mikrofon kullanma isteğini kabul edin.
+- 🔴 **Record**'a basarak kaydı başlatın.
+- 🐱 Kedinizin miyavlamasını kaydedin. Birkaç saniye dahi yeterli olacaktır.
+- ⏹️ Durdurmak için 🔴 **Stop**'a tıklayın.
+- 🔮 **"Ruh Halini Belirle"** ye basın ve yapay zeka kedinizin halet-i ruhiyesini tahmin etsin!
+""",
         "audio_label": "🎤 Kedi Sesi Kaydet veya Yükle",
         "output_label": "🐱 Tespit Edilen Ruh Hali",
         "submit_btn": "🔮 Ruh Halini Belirle",
@@ -272,39 +304,43 @@ def predict_with_translation(audio, language):
     return translated_result
 
 # Create the interface with Blocks for language switching
+# Default language
+DEFAULT_LANG = "TR"
+DEFAULT_T = TRANSLATIONS[DEFAULT_LANG]
+
 with gr.Blocks(title="Cat Mood Classifier") as demo:
     # State for current language
-    current_lang = gr.State("EN")
+    current_lang = gr.State(DEFAULT_LANG)
     
     # Header row with title on left, language on right
     with gr.Row():
         with gr.Column(scale=4):
-            title_md = gr.Markdown("# 🐱 Miyavdan Haller")
+            title_md = gr.Markdown(f"# {DEFAULT_T['title']}")
         with gr.Column(scale=1, min_width=120):
             language_select = gr.Radio(
                 choices=["EN", "TR"],
-                value="TR",
+                value=DEFAULT_LANG,
                 label="🌐",
                 interactive=True,
             )
     
-    subtitle_md = gr.Markdown("**Kedinizin miyavlamasını kaydedin ve ruh halini öğrenin!**")
-    instructions_md = gr.Markdown("Kayıt yapmak için mikrofon butonuna tıklayın veya ses dosyası yükleyin. Yapay zeka modeli, sesi 10 farklı kedi ruh haline göre sınıflandıracak. **Not:** Lütfen tarayıcınızda mikrofon erişimine izin verin.")
+    subtitle_md = gr.Markdown(DEFAULT_T["subtitle"])
+    instructions_md = gr.Markdown(DEFAULT_T["instructions"])
     
     # Main interface - vertical layout
     audio_input = gr.Audio(
         sources=["microphone", "upload"],
         type="numpy",
-        label="🎤 Kedi Sesi Kaydet veya Yükle",
+        label=DEFAULT_T["audio_label"],
     )
     
     with gr.Row():
-        clear_btn = gr.ClearButton([audio_input], value="🗑️ Temizle")
-        submit_btn = gr.Button("🔮 Ruh Halini Belirle", variant="primary")
+        clear_btn = gr.ClearButton([audio_input], value=DEFAULT_T["clear_btn"])
+        submit_btn = gr.Button(DEFAULT_T["submit_btn"], variant="primary")
     
     output_label = gr.Label(
         num_top_classes=5,
-        label="🐱 Tespit Edilen Ruh Hali",
+        label=DEFAULT_T["output_label"],
     )
     
     # Function to update UI text based on language
